@@ -1,65 +1,97 @@
-import Head from 'next/head'
-import styles from '../styles/Home.module.css'
+import Head from "next/head";
+import styles from "../styles/Home.module.css";
+// import { parseCookies, setCookie, destroyCookie } from "nookies";
+import { useEffect } from "react";
+import Stripe from "stripe";
+import { loadStripe } from "@stripe/stripe-js";
 
-export default function Home() {
+// destroyCookie(null, "cart");
+export default function Home({ prices }) {
+  // const products = PRODUCTS.map((prod) => ({ ...prod, quantity: 0 }));
+
+  useEffect(() => {
+    console.log(prices);
+  }, []);
+
+  // const addToCart = (prod) => {
+  //   let cart = parseCookies().cart || "";
+
+  //   if (cart === "") {
+  //     setCookie(null, "cart", JSON.stringify({ [prod.id]: { ...prod, quantity: 1 } }));
+  //   } else {
+  //     cart = JSON.parse(cart);
+  //     let indexOfProd = null;
+
+  //     for (const id in cart) {
+  //       if (id == prod.id) indexOfProd = id;
+  //     }
+
+  //     if (indexOfProd !== null) {
+  //       cart[indexOfProd].quantity += 1;
+  //     } else {
+  //       cart = Object.assign({}, cart, { [prod.id]: { ...prod, quantity: 1 } });
+  //     }
+  //     setCookie(null, "cart", JSON.stringify(cart));
+  //   }
+
+  //   console.log(JSON.parse(parseCookies().cart));
+  //   // alert(`successfully added "${prod.name} to cart."`);
+  // };
+
+  const handleCheckout = async (id) => {
+    const { sessionId } = await fetch("api/checkout/session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        quantity: 2,
+        price_id: id
+      })
+    }).then((res) => res.json());
+
+    const stripe = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+    const { errror } = await stripe.redirectToCheckout({
+      sessionId
+    });
+  };
+
   return (
     <div className={styles.container}>
       <Head>
-        <title>Create Next App</title>
+        <title>Stripe E-commerce</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
       <main className={styles.main}>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
+        <h1>Shop</h1>
 
-        <p className={styles.description}>
-          Get started by editing{' '}
-          <code className={styles.code}>pages/index.js</code>
-        </p>
-
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h3>Documentation &rarr;</h3>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h3>Learn &rarr;</h3>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/master/examples"
-            className={styles.card}
-          >
-            <h3>Examples &rarr;</h3>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/import?filter=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-          >
-            <h3>Deploy &rarr;</h3>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
+        <div className={styles.products}>
+          {prices.map(({ id, product: prod, unit_amount }) => (
+            <div key={prod.id} className={styles.product}>
+              <img style={{ width: 350, height: 350 }} src={prod.images[0]} alt={prod.name} />
+              <h1>{prod.name}</h1>
+              <p>${unit_amount / 100}</p>
+              {/* <button onClick={() => addToCart(prod)}>Add to Cart</button> */}
+              <button onClick={() => handleCheckout(id)}>BUY NOW</button>
+            </div>
+          ))}
         </div>
       </main>
-
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <img src="/vercel.svg" alt="Vercel Logo" className={styles.logo} />
-        </a>
-      </footer>
     </div>
-  )
+  );
 }
+
+export const getServerSideProps = async () => {
+  const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+
+  const prices = await stripe.prices.list({
+    active: true,
+    limit: 10,
+    expand: ["data.product"]
+  });
+
+  return {
+    props: { prices: prices.data }
+  };
+};
